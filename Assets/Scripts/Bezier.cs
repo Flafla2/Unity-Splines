@@ -12,6 +12,14 @@ public class Bezier : MonoBehaviour {
 		p3 = new Vector3(4,0,0);
 	}
 
+	public Vector3 GetPoint(float t) {
+		return transform.TransformPoint(PointOnBezier(p0,p1,p2,p3,t));
+	}
+
+	public Vector3 GetDirection(float t) {
+		return DerivOnBezier(p0,p1,p2,p3,t).normalized;
+	}
+
 	// Second Order (Three point / parabolic) bezier solver.
 	// Equation: (1-t)^2*P_0 + 2*t*(1-t)*P_1 + t^2*P_2
 	public static Vector3 PointOnBezier(Vector3 p0, Vector3 p1, Vector3 p2, float t) {
