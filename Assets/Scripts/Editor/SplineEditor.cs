@@ -32,10 +32,14 @@ public class SplineEditor : Editor {
 
 		
 		for(int x=0;x<spline.GetControlPointCount();x++) {
+
+			if(spline.Loop && x == spline.GetControlPointCount()-1)
+				continue;
+
 			Handles.color = Color.yellow;
 			Vector3 pos = spline.GetControlPoint(x);
 			bool pressed = false;
-			if(x != 0) {
+			if(x != 0 || spline.Loop) {
 				Vector3 hn = spline.GetHandle(x,true);
 				Handles.DrawLine(pos,hn);
 				
@@ -57,7 +61,7 @@ public class SplineEditor : Editor {
 					Handles.DotCap(0,hn,rot,HandleUtility.GetHandleSize(hn)*0.05f);
 					Handles.Label(hn, "Right Handle");
 				}
-				else if(!(spline.Loop && x == spline.GetControlPointCount()-1)) {
+				else {
 					Handles.color = Color.gray;
 					pressed |= Handles.Button(hn,rot,HandleUtility.GetHandleSize(hn)*0.05f,HandleUtility.GetHandleSize(hn)*0.06f,Handles.DotCap);
 					Handles.color = Color.yellow;

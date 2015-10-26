@@ -34,11 +34,28 @@ public class Spline : MonoBehaviour {
 			t_sub = 1;
 		}
 
-		if(base_coord+3 >= points.Length || base_coord < 0)
-			return Vector3.zero;
+		if(base_coord+3 >= points.Length)
+			return transform.TransformPoint(points[points.Length-1]);
+		if(base_coord < 0)
+			return transform.TransformPoint(points[0]);
 
 		return transform.TransformPoint(Bezier.PointOnBezier(points[base_coord],points[base_coord+1],points[base_coord+2],points[base_coord+3],t_sub));
 	}
+
+	public Vector3 GetDeriv(float t) {
+		int base_coord = (int)t * 3;
+		if(base_coord+4 > points.Length || base_coord < 0)
+			return Vector3.zero;
+		float t_sub = t-(int)t;
+
+		return Bezier.DerivOnBezier(points[base_coord],points[base_coord+1],points[base_coord+2],points[base_coord+3],t_sub);
+	}
+
+	public Vector3 GetDirection(float t) {
+		return GetDeriv(t).normalized;
+	}
+
+
 
 	public int GetControlPointCount() {
 		return (points.Length-1)/3+1;
@@ -48,21 +65,98 @@ public class Spline : MonoBehaviour {
 		return (points.Length-1)/3;
 	}
 
+	private Vector3 GetControlPointRaw(int index) {
+		if(Loop && index == GetControlPointCount()-1)
+			index = 0;
+
+		if(index < 0 || index >= points.Length-1)
+			return null;
+
+		return points[index*3];
+	}
+
+	public Vector3 GetControlPoint(int index) {
+		Vector3 raw = GetControlPointRaw(index);
+		if(raw == null)
+			return null;
+		return transform.TransformPoint(raw);
+	}
+
+	private Vector3 GetHandleRaw(int index, bool left) {
+		if(Loop && index == 0 && left)
+			index = GetControlPointCount()-1;
+		if(Loop && index == GetControlPointCount()-1 && !left)
+			index = 0;
+		int ind = index*3 + (left ? -1 : 1);
+
+		if(ind < 0 || ind >= points.Length-1)
+			return null;
+
+		return points[ind];
+	}
+
+	public Vector3 GetHandle(int index, bool left) {
+		Vector3 raw = GetHandleRaw(index,left);
+		if(raw == null)
+			return null;
+		return transform.TransformPoint(raw);
+	}
+
+	public void SetControlPointRaw(int index, Vector3 point) {
+		if(Loop && index == GetControlPointCount()-1)
+			index = 0;
+
+		if(index < 0 || index >= GetControlPointCount())
+			return;
+
+		// 1. Move all of the handles over along with the control point
+		Vector3 og = GetControlPointRaw(index);
+		Vector3 diff = point-og;
+		Vector3 left = GetHandleRaw(index,true);
+		Vector3 right = GetHandleRaw(index,false);
+		if(left != null)
+			SetHandleRaw(index,true,left+diff);
+		if(right != null)
+			SetHandleRaw(index,false,right+diff);
+		
+		// 2. Actually set the point
+		points[index*3] = point;
+	}
+
+	public void SetControlPoint(int index, Vector3 point) {
+		SetControlPointRaw(index,transform.InverseTransformPoint(point));
+	}
+
+	public void SetHandle(int index, bool left, Vector3 point) {
+		if(Loop && index == 0 && left)
+			index = GetControlPointCount()-1;
+		else if(Loop && index == GetControlPointCount()-1 && !left)
+			index = 0;
+
+		int true_index = index*3;
+		int active = left ? true_index-1 : true_index+1;
+
+		points[active] = transform.InverseTransformPoint(point);
+
+		EnforceConstraint(index, left ? ConstraintEnforcementType.Left : ConstraintEnforcementType.Right);
+	}
+
 	public HandleConstraint GetConstraint(int index) {
 		return constraints[index];
 	}
 
 	public void SetConstraint(int index, HandleConstraint constraint) {
 		constraints[index] = constraint;
-		EnforceContraint(index);
+
+		EnforceContraint(index, ConstraintEnforcementType.Average);
 	}
 
-	public void EnforceContraint(int index) {
+	private void EnforceContraint(int index, ConstraintEnforcementType type) {
 		if(!Loop && (index == 0 || index == GetControlPointCount()-1))
 			return;
 		int true_index = index*3;
 		int left =  (true_index-1+points.Length)%points.Length;
-		int right = (true_index+1+points.Length)%points.Length;
+		int right = (true_index+1)%points.Length;
 
 		Vector3 control = points[true_index];
 		Vector3 diff_l = points[left]-control;
@@ -83,72 +177,7 @@ public class Spline : MonoBehaviour {
 		}
 	}
 
-	public Vector3 GetControlPoint(int index) {
-		return transform.TransformPoint(points[index * 3]);
-	}
-
-	public Vector3 GetHandle(int index, bool left) {
-		if(left)
-			return transform.TransformPoint(points[index*3-1]);
-		return transform.TransformPoint(points[index*3+1]);
-	}
-
-	public void SetControlPoint(int index, Vector3 point) {
-		int true_index = index * 3;
-		Vector3 inv = transform.InverseTransformPoint(point);
-		Vector3 diff = inv-points[true_index];
-		if(true_index > 0)
-			points[true_index-1] += diff;
-		if(true_index < points.Length-1)
-			points[true_index+1] += diff;
-		points[true_index] = inv;
-	}
-
-	public void SetHandle(int index, bool left, Vector3 point) {
-		if(Loop && ((index == 0 && left)))
-			index = GetControlPointCount()-1;
-		if(Loop && (index == GetControlPointCount()-1 && !left))
-			index = 0;
-
-		int true_index = index*3;
-		int active = left ? true_index-1 : true_index+1;
-		int constrain = left ? true_index+1 : true_index-1;
-
-		if(Loop && left && index == GetControlPointCount()-1)
-			constrain = 1;
-		if(Loop && !left && index == 0)
-			constrain = points.Length-2;
-
-		points[active] = transform.InverseTransformPoint(point);
-
-		Vector3 control = points[true_index];
-		Vector3 diff = points[active]-control;
-		if(constrain >= 0 && constrain < points.Length) {
-			switch(constraints[index]) {
-				case HandleConstraint.Aligned:
-				float magnitude = (control-points[constrain]).magnitude;
-				Vector3 dir = -diff.normalized;
-				points[constrain] = control + magnitude*dir;
-				break;
-				case HandleConstraint.Mirrored:
-				points[constrain] = control-diff;
-				break;
-			}
-		}
-	}
-
-	public Vector3 GetDeriv(float t) {
-		int base_coord = (int)t * 3;
-		if(base_coord+4 > points.Length || base_coord < 0)
-			return Vector3.zero;
-		float t_sub = t-(int)t;
-
-		return Bezier.DerivOnBezier(points[base_coord],points[base_coord+1],points[base_coord+2],points[base_coord+3],t_sub);
-	}
-
-	public Vector3 GetDirection(float t) {
-		return GetDeriv(t).normalized;
-	}
+	
 
 	public void AddCurve() {
 		if(Loop)
@@ -161,7 +190,7 @@ public class Spline : MonoBehaviour {
 		points[points.Length-2] = points[points.Length-4] + Vector3.right*2;
 		points[points.Length-3] = points[points.Length-4] + Vector3.right;
 
-		EnforceContraint(GetControlPointCount()-1);
+		EnforceContraint(GetControlPointCount()-1, ConstraintEnforcementType.Average);
 	}
 
 	public void AddCurveBeginning() {
@@ -182,7 +211,7 @@ public class Spline : MonoBehaviour {
 
 		constraints[0] = HandleConstraint.Free;
 
-		EnforceContraint(0);
+		EnforceContraint(0, ConstraintEnforcementType.Average);
 	}
 
 	public void RemoveCurve(int elt) {
@@ -248,5 +277,9 @@ public class Spline : MonoBehaviour {
 
 	public enum HandleConstraint {
 		Free, Aligned, Mirrored
+	}
+
+	private enum ConstraintEnforcementType {
+		Left, Right, Average
 	}
 }
