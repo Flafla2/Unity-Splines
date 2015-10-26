@@ -10,8 +10,6 @@ public class SplineEditor : Editor {
 	private Quaternion rot;
 	private Transform tr;
 
-	private int selected_elt = 0;
-
 	private void OnSceneGUI() {
 		spline = target as Spline;
 		tr = spline.transform;
@@ -35,52 +33,80 @@ public class SplineEditor : Editor {
 		
 		for(int x=0;x<spline.GetControlPointCount();x++) {
 			Handles.color = Color.yellow;
-			if(x != 0)
-				Handles.DrawLine(spline.GetControlPoint(x),spline.GetHandle(x,true));
-			if(x < spline.GetCurveCount())
-				Handles.DrawLine(spline.GetControlPoint(x),spline.GetHandle(x,false));
+			Vector3 pos = spline.GetControlPoint(x);
+			bool pressed = false;
+			if(x != 0) {
+				Vector3 hn = spline.GetHandle(x,true);
+				Handles.DrawLine(pos,hn);
+				
+				if(x == spline.selected_elt) {
+					Handles.DotCap(0,hn,rot,HandleUtility.GetHandleSize(hn)*0.05f);
+					Handles.Label(hn, "Left Handle");
+				}
+				else {
+					Handles.color = Color.gray;
+					pressed |= Handles.Button(hn,rot,HandleUtility.GetHandleSize(hn)*0.05f,HandleUtility.GetHandleSize(hn)*0.06f,Handles.DotCap);
+					Handles.color = Color.yellow;
+				}
+			}
+			if(x < spline.GetCurveCount()) {
+				Vector3 hn = spline.GetHandle(x,false);
+				Handles.DrawLine(pos,hn);
+				Handles.DotCap(0,hn,rot,HandleUtility.GetHandleSize(hn)*0.05f);
+				if(x == spline.selected_elt) {
+					Handles.DotCap(0,hn,rot,HandleUtility.GetHandleSize(hn)*0.05f);
+					Handles.Label(hn, "Right Handle");
+				}
+				else if(!(spline.Loop && x == spline.GetControlPointCount()-1)) {
+					Handles.color = Color.gray;
+					pressed |= Handles.Button(hn,rot,HandleUtility.GetHandleSize(hn)*0.05f,HandleUtility.GetHandleSize(hn)*0.06f,Handles.DotCap);
+					Handles.color = Color.yellow;
+				}
+			}
 
-			if(x == selected_elt)
+			if(x == spline.selected_elt) {
+				Handles.color = Color.green;
+				Handles.DotCap(0,pos,rot,HandleUtility.GetHandleSize(pos)*0.05f);
 				continue;
+			}
 
 			Handles.color = Color.white;
-			Vector3 pos = spline.GetControlPoint(x);
-			bool pressed = Handles.Button(pos,rot,HandleUtility.GetHandleSize(pos)*0.05f,HandleUtility.GetHandleSize(pos)*0.06f,Handles.DotCap);
+			pressed |= Handles.Button(pos,rot,HandleUtility.GetHandleSize(pos)*0.05f,HandleUtility.GetHandleSize(pos)*0.06f,Handles.DotCap);
 			if(pressed) {
 				EditorUtility.SetDirty( target );
-				selected_elt = x;
+				spline.selected_elt = x;
 			}
 		}
 
 		
 
-		Vector3 pt = spline.GetControlPoint(selected_elt);
+		Vector3 pt = spline.GetControlPoint(spline.selected_elt);
 		EditorGUI.BeginChangeCheck();
 		Vector3 npt = Handles.PositionHandle(pt, rot);
 		if (EditorGUI.EndChangeCheck()) {
 			Undo.RecordObject(spline, "Move Point");
-			spline.SetControlPoint(selected_elt,tr.InverseTransformPoint(npt));
+			spline.SetControlPoint(spline.selected_elt,tr.InverseTransformPoint(npt));
 			EditorUtility.SetDirty(spline);
 		}
 
-		if(selected_elt != 0) {
-			pt = spline.GetHandle(selected_elt,true);
+		if(spline.selected_elt != 0) {
+			pt = spline.GetHandle(spline.selected_elt,true);
 			EditorGUI.BeginChangeCheck();
 			pt = Handles.PositionHandle(pt, rot);
 			if (EditorGUI.EndChangeCheck()) {
 				Undo.RecordObject(spline, "Move Left Handle");
-				spline.SetHandle(selected_elt,true,pt);
+				spline.SetHandle(spline.selected_elt,true,pt);
 				EditorUtility.SetDirty(spline);
 			}
 		}
 
-		if(selected_elt < spline.GetCurveCount()) {
-			pt = spline.GetHandle(selected_elt,false);
+		if(spline.selected_elt < spline.GetCurveCount()) {
+			pt = spline.GetHandle(spline.selected_elt,false);
 			EditorGUI.BeginChangeCheck();
 			pt = Handles.PositionHandle(pt, rot);
 			if (EditorGUI.EndChangeCheck()) {
 				Undo.RecordObject(spline, "Move Right Handle");
-				spline.SetHandle(selected_elt,false,pt);
+				spline.SetHandle(spline.selected_elt,false,pt);
 				EditorUtility.SetDirty(spline);
 			}
 		}
@@ -90,11 +116,39 @@ public class SplineEditor : Editor {
 		if(spline == null)
 			return;
 
-		spline.SetControlPoint(selected_elt,EditorGUILayout.Vector3Field("Point:",spline.GetControlPoint(selected_elt)));
-		if(selected_elt != 0)
-			spline.SetHandle(selected_elt,true,EditorGUILayout.Vector3Field("Left Handle:",spline.GetHandle(selected_elt,true)));
-		if(selected_elt < spline.GetCurveCount())
-			spline.SetHandle(selected_elt,false,EditorGUILayout.Vector3Field("Right Handle:",spline.GetHandle(selected_elt,false)));
+		EditorGUI.BeginChangeCheck();
+		bool loop = EditorGUILayout.Toggle("Loop:", spline.Loop);
+		if (EditorGUI.EndChangeCheck()) {
+			Undo.RecordObject(spline, "Toggle Loop");
+			spline.Loop = loop;
+			EditorUtility.SetDirty(spline);
+		}
+
+		EditorGUI.BeginChangeCheck();
+		Vector3 point = EditorGUILayout.Vector3Field("Point:",spline.GetControlPoint(spline.selected_elt));
+		if (EditorGUI.EndChangeCheck()) {
+			Undo.RecordObject(spline, "Move Point");
+			spline.SetControlPoint(spline.selected_elt,point);
+			EditorUtility.SetDirty(spline);
+		}
+		if(spline.selected_elt != 0) {
+			EditorGUI.BeginChangeCheck();
+			point = EditorGUILayout.Vector3Field("Left Handle:",spline.GetHandle(spline.selected_elt,true));
+			if (EditorGUI.EndChangeCheck()) {
+				Undo.RecordObject(spline, "Move Left Handle");
+				spline.SetHandle(spline.selected_elt,true,point);
+				EditorUtility.SetDirty(spline);
+			}
+		}
+		if(spline.selected_elt < spline.GetCurveCount()) {
+			EditorGUI.BeginChangeCheck();
+			point = EditorGUILayout.Vector3Field("Right Handle:",spline.GetHandle(spline.selected_elt,false));
+			if (EditorGUI.EndChangeCheck()) {
+				Undo.RecordObject(spline, "Move Left Handle");
+				spline.SetHandle(spline.selected_elt,false,point);
+				EditorUtility.SetDirty(spline);
+			}
+		}
 
 		GUILayout.Label("Add Curve At:");
 		EditorGUILayout.BeginHorizontal();
@@ -112,22 +166,34 @@ public class SplineEditor : Editor {
 
 		GUILayout.Label("Subdivide Curve:");
 		EditorGUILayout.BeginHorizontal();
-		if(selected_elt != 0 && GUILayout.Button("Left")) {
+		if(spline.selected_elt != 0 && GUILayout.Button("Left")) {
 			Undo.RecordObject(spline, "Subdivide Curve Left");
-			spline.SubdivideCurve(selected_elt);
+			spline.SubdivideCurve(spline.selected_elt);
 			EditorUtility.SetDirty(spline);
 		}
-		if(selected_elt < spline.GetCurveCount() && GUILayout.Button("Right")) {
+		if(spline.selected_elt < spline.GetCurveCount() && GUILayout.Button("Right")) {
 			Undo.RecordObject(spline, "Subdivide Curve Right");
-			spline.SubdivideCurve(selected_elt+1);
+			spline.SubdivideCurve(spline.selected_elt+1);
 			EditorUtility.SetDirty(spline);
 		}
 		EditorGUILayout.EndHorizontal();
 
 		if(GUILayout.Button("Remove Curve")) {
 			Undo.RecordObject(spline, "Remove Curve");
-			spline.RemoveCurve(selected_elt);
+			spline.RemoveCurve(spline.selected_elt);
 			EditorUtility.SetDirty(spline);
+		}
+
+		if((spline.selected_elt != 0 && spline.selected_elt < spline.GetControlPointCount()-1) || spline.Loop) {
+			EditorGUI.BeginChangeCheck();
+			Spline.HandleConstraint nw = (Spline.HandleConstraint)EditorGUILayout.EnumPopup("Handle Constraint: ", spline.GetConstraint(spline.selected_elt));
+			if(EditorGUI.EndChangeCheck()) {
+				Undo.RecordObject(spline, "Set Constraint");
+				spline.SetConstraint(spline.selected_elt,nw);
+				if(spline.selected_elt == spline.GetControlPointCount()-1)
+					spline.selected_elt = 0;
+				EditorUtility.SetDirty(spline);
+			}
 		}
 	}
 
