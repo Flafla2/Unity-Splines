@@ -58,6 +58,10 @@ public class Spline : MonoBehaviour {
     // -------- GENERALIZED BEZIER ACCESS -------- //
 
     public Vector3 GetPoint(float t) {
+    	return transform.TransformPoint(GetPointRaw(t));
+    }
+
+    private Vector3 GetPointRaw(float t) {
 		int base_coord = (int)t * 3;
 		float t_sub = t-(int)t;
 
@@ -76,10 +80,14 @@ public class Spline : MonoBehaviour {
         Vector3 p2 = points[base_coord + 2];
         Vector3 p3 = points[base_coord + 3];
 
-        return transform.TransformPoint(Bezier.PointOnBezier(p0,p1,p2,p3,t_sub));
+        return Bezier.PointOnBezier(p0,p1,p2,p3,t_sub);
 	}
 
 	public Vector3 GetDeriv(float t) {
+		return transform.TransformDirection(GetDerivRaw(t));
+	}
+
+	private Vector3 GetDerivRaw(float t) {
 		int base_coord = (int)t * 3;
 		if(base_coord+4 > points.Length || base_coord < 0)
 			return Vector3.zero;
@@ -90,6 +98,10 @@ public class Spline : MonoBehaviour {
 
 	public Vector3 GetDirection(float t) {
 		return GetDeriv(t).normalized;
+	}
+
+	private Vector3 GetDirectionRaw(float t) {
+		return GetDerivRaw(t).normalized;
 	}
 
     // ------- SPLINE EDITING TOOLS ------- //
@@ -260,7 +272,7 @@ public class Spline : MonoBehaviour {
 			return;
 
 		Vector3 point = points[0];
-		Vector3 deriv = GetDeriv(0);
+		Vector3 deriv = GetDerivRaw(0);
 
 		Array.Resize<Vector3>(ref points, points.Length+3);
 		Array.Resize<HandleConstraint>(ref constraints, constraints.Length+1);
@@ -297,8 +309,8 @@ public class Spline : MonoBehaviour {
 		if(elt*3 > points.Length && elt != 0)
 			return;
 
-		Vector3 point = GetPoint((float)elt-0.5f);
-		Vector3 deriv = GetDirection((float)elt-0.5f);
+		Vector3 point = GetPointRaw((float)elt-0.5f);
+		Vector3 deriv = GetDirectionRaw((float)elt-0.5f);
 		
 		Array.Resize<Vector3>(ref points, points.Length+3);
 		ShiftArray<Vector3>(ref points, 3, elt*3-1);
