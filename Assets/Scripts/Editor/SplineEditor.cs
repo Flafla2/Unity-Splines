@@ -32,7 +32,6 @@ public class SplineEditor : Editor {
 
 		
 		for(int x=0;x<spline.GetControlPointCount();x++) {
-
 			if(spline.Loop && x == spline.GetControlPointCount()-1)
 				continue;
 
@@ -93,7 +92,7 @@ public class SplineEditor : Editor {
 			EditorUtility.SetDirty(spline);
 		}
 
-		if(spline.selected_elt != 0) {
+		if(spline.Loop || spline.selected_elt != 0) {
 			pt = spline.GetHandle(spline.selected_elt,true);
 			EditorGUI.BeginChangeCheck();
 			pt = Handles.PositionHandle(pt, rot);
@@ -119,6 +118,9 @@ public class SplineEditor : Editor {
 	public override void OnInspectorGUI() {
 		if(spline == null)
 			return;
+
+        EditorGUI.BeginChangeCheck();
+        spline.DrawGizmo = EditorGUILayout.Toggle("Draw Gizmo", spline.DrawGizmo);
 
 		EditorGUI.BeginChangeCheck();
 		bool loop = EditorGUILayout.Toggle("Loop:", spline.Loop);
@@ -170,12 +172,12 @@ public class SplineEditor : Editor {
 
 		GUILayout.Label("Subdivide Curve:");
 		EditorGUILayout.BeginHorizontal();
-		if(spline.selected_elt != 0 && GUILayout.Button("Left")) {
+		if((spline.selected_elt != 0 || spline.Loop) && GUILayout.Button("Left")) {
 			Undo.RecordObject(spline, "Subdivide Curve Left");
 			spline.SubdivideCurve(spline.selected_elt);
 			EditorUtility.SetDirty(spline);
 		}
-		if(spline.selected_elt < spline.GetCurveCount() && GUILayout.Button("Right")) {
+		if((spline.selected_elt < spline.GetCurveCount() || spline.Loop) && GUILayout.Button("Right")) {
 			Undo.RecordObject(spline, "Subdivide Curve Right");
 			spline.SubdivideCurve(spline.selected_elt+1);
 			EditorUtility.SetDirty(spline);
